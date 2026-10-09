@@ -1,0 +1,6 @@
+{
+  "donor_repository": "orbis-launcher",
+  "donor_revision": "8f3e315b57006b4f9cd574a5b665fa8b9ca02577",
+  "migration_date": "2026-10-09",
+  "integration": "../orbis-launcher/repositories.lock.json"
+}
