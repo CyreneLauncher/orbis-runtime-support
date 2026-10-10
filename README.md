@@ -10,6 +10,16 @@ See PORT-PROVENANCE.json for exact origins.
 - `pinned_archive.py`: downloads an upstream archive and checks it against a pin the calling
   port supplies. Each port keeps its own pins.
 
+- `provision_sdk.py` with `toolchain.lock.json`: installs the pinned payload SDK and OpenOrbis
+  toolchain and exports `ORBIS_SDK`, `PS4_TOOLCHAIN`, `OO_PS4_TOOLCHAIN` and `LLVM_CONFIG`.
+- `release_archive.py`: packs a port's outputs as a release asset from the port's `release.json`
+  (each output's top-level files plus licence files from its `sources/`, and any further paths it
+  lists), with a SHA-256 inventory; `unpack` checks an asset and extracts it into a build root
+  without replacing existing files.
+
+Each port's release workflow checks this repository out at the revision in the port's
+`dependencies.lock.json`.
+
 This repository depends on no other port. Ports find it as a sibling checkout named
 `orbis-runtime-support`, or through `ORBIS_RUNTIME_SUPPORT`.
 
