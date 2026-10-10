@@ -7,16 +7,12 @@ orbis_prx_tls.c (per-thread TLS) and the --prx-tls link script instead of the JD
 shared TLS block. Archive symbols stay internal (--exclude-libs=ALL).
 """
 import re
-import os
 import subprocess
 import sys
 from pathlib import Path
 
-INTEGRATION = Path(os.environ.get("ORBIS_LAUNCHER_ROOT", Path(__file__).resolve().parent.parent / "orbis-launcher")).resolve()
-sys.path.insert(0, str(INTEGRATION / "graphics-probe/tools"))
-
-ROOT = INTEGRATION / "graphics-probe"
-RUNNER = ROOT.parent / 'orbis-java-app'
+# The runtime sources and link-script tool live beside this file.
+SUPPORT = Path(__file__).resolve().parent
 EXEC_TLS = re.compile(r'R_X86_64_(GOTTPOFF|TPOFF32|TPOFF64|GOTPC32_TLSDESC|TLSDESC_CALL|TLSDESC)\b')
 REQUIRED_EXPORTS = ('orbis_configure_runtime_v2', 'orbis_run_initializers')
 WRAPPED = ('dlopen', 'dlsym', 'dlclose', 'dlerror', 'sceKernelDebugOutText', '_exit')
@@ -41,10 +37,10 @@ class Toolchain:
 
 def stamp_recipe(stamp, tools):
     """Adds what every module built with this recipe reads to a build_stamp.Stamp."""
-    return (stamp.files(Path(__file__), RUNNER / 'tools/prepare_jvm_link.py',
-                        *[RUNNER / f'tools/{name}.c' for name in
+    return (stamp.files(Path(__file__), SUPPORT / 'prepare_jvm_link.py',
+                        *[SUPPORT / f'{name}.c' for name in
                           ('native_dlfcn', 'orbis_prx_tls', 'orbis_initializers', 'orbis_runtime')],
-                        *sorted((RUNNER / 'tools').glob('*.h')))
+                        *sorted(SUPPORT.glob('*.h')))
             .stats(tools.sdk / 'bin', tools.root / 'include', tools.root / 'lib', tools.root / 'link.x',
                    tools.root / 'bin/linux/create-fself')
             .value('recipe', [str(tools.sdk), str(tools.root), WRAPPED, ENVIRONMENT_MEMBERS]))
@@ -54,8 +50,8 @@ def runtime_objects(tools, out):
     """Link script plus the objects every JVM-loadable module carries."""
     out.mkdir(parents=True, exist_ok=True)
     script = out / 'prx-link.x'
-    run(sys.executable, RUNNER / 'tools/prepare_jvm_link.py', tools.root / 'link.x', script, '--prx-tls')
-    objects = [tools.compile(RUNNER / f'tools/{name}.c', out / f'{name}.o')
+    run(sys.executable, SUPPORT / 'prepare_jvm_link.py', tools.root / 'link.x', script, '--prx-tls')
+    objects = [tools.compile(SUPPORT / f'{name}.c', out / f'{name}.o')
                for name in ('native_dlfcn', 'orbis_prx_tls', 'orbis_initializers', 'orbis_runtime')]
     for member in ENVIRONMENT_MEMBERS:
         obj = out / f'environment_{member}.o'
