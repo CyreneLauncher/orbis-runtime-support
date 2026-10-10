@@ -130,9 +130,16 @@ def audit(elf, *, allowed_needed, jni_prefix, jni_count, require_onload=True, re
 
 
 def fself(tools, elf, paid):
+    """Sign a release PRX without debug information; the unstripped ELF stays beside it for debugging.
+
+    Only debug sections go: create-fself needs the symbol table, so --strip-all is not an option.
+    """
     name = elf.stem
     prx = elf.with_suffix('.prx')
-    run(tools.root / 'bin/linux/create-fself', '-in=' + str(elf), '-out=' + str(elf.with_suffix('.oelf')),
+    release = elf.parent / 'stripped' / elf.name
+    release.parent.mkdir(exist_ok=True)
+    run('llvm-strip', '--strip-debug', '-o', release, elf)
+    run(tools.root / 'bin/linux/create-fself', '-in=' + str(release), '-out=' + str(elf.with_suffix('.oelf')),
         '--lib=' + str(prx), '--libname=' + name, '--paid', paid)
     if prx.read_bytes()[:4] != b'O\x15=\x1d':
         raise SystemExit(f'create-fself did not produce a SELF for {elf.name}')
