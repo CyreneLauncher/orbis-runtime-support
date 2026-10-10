@@ -6,6 +6,8 @@ A port describes its release in a JSON spec:
   outputs     output directories under the build root. Each keeps its top-level files
               (modules, audits, symbol lists) and, under sources/, only licence files and
               the extra names in source_files. Object files, CMake trees and stamps stay out.
+              The unstripped ELF behind each signed module goes to a separate
+              <asset>-debug.tar.xz, as AngelAuraMC publishes its debug info apart from its JREs.
   files       further paths or globs under the build root, kept whole (.git excluded).
 
 The archive carries release-inventory.json: the SHA-256 and mode of every file. Unpacking
@@ -47,8 +49,18 @@ def regular(path, root):
     return path
 
 
-def selected(root, spec):
-    """Every file the spec selects, as paths relative to root."""
+def is_elf(path):
+    with path.open('rb') as source:
+        return source.read(4) == b'\x7fELF'
+
+
+def debug_asset(spec):
+    asset = spec['asset']
+    return asset.removesuffix('.tar.xz') + '-debug.tar.xz'
+
+
+def selected(root, spec, debug=False):
+    """The files the spec selects as paths relative to root: the release, or with debug its unstripped ELFs."""
     root = Path(root)
     chosen = set()
     extra = set(spec.get('source_files', ()))
@@ -58,13 +70,16 @@ def selected(root, spec):
             raise ValueError('Missing release output: ' + str(output))
         for path in sorted(output.iterdir()):
             if path.is_file() and not path.name.startswith('.') and path.suffix not in SKIPPED_SUFFIXES:
-                chosen.add(regular(path, root).relative_to(root))
+                if (path.suffix == '.so' and is_elf(path)) == debug:
+                    chosen.add(regular(path, root).relative_to(root))
+        if debug:
+            continue
         sources = output / 'sources'
         if sources.is_dir():
             for path in sources.rglob('*'):
                 if path.is_file() and (LICENCE.search(path.name) or path.name in extra):
                     chosen.add(regular(path, root).relative_to(root))
-    for pattern in spec.get('files', ()):
+    for pattern in () if debug else spec.get('files', ()):
         relative(pattern)
         matches = sorted(root.glob(pattern))
         if not matches:
@@ -73,7 +88,7 @@ def selected(root, spec):
             for path in ([match] if match.is_file() else sorted(match.rglob('*'))):
                 if path.is_file() and '.git' not in path.relative_to(root).parts:
                     chosen.add(regular(path, root).relative_to(root))
-    if not chosen:
+    if not chosen and not debug:
         raise ValueError('Release selects no files')
     return sorted(chosen)
 
@@ -85,10 +100,12 @@ def normalized(info):
     return info
 
 
-def pack(root, spec, archive):
+def pack(root, spec, archive, debug=False):
     root, archive = Path(root).resolve(), Path(archive)
-    files = selected(root, spec)
-    inventory = {'schema': 1, 'asset': spec['asset'],
+    files = selected(root, spec, debug)
+    if not files:
+        return None
+    inventory = {'schema': 1, 'asset': archive.name,
                  'files': {path.as_posix(): {'sha256': digest(root / path),
                                              'mode': (root / path).stat().st_mode & 0o777}
                            for path in files}}
@@ -155,6 +172,7 @@ def main():
     if args.command == 'pack':
         spec = json.loads(args.spec.read_text())
         pack(args.root, spec, args.dist / spec['asset'])
+        pack(args.root, spec, args.dist / debug_asset(spec), debug=True)
     else:
         unpack(args.archive, args.root, args.sha256)
 

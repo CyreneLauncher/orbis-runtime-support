@@ -21,6 +21,7 @@ def write(path, data=b'x', mode=0o644):
 class ReleaseArchiveTests(unittest.TestCase):
     def layout(self, root):
         write(root / 'out/libfoo.prx', b'prx', 0o755)
+        write(root / 'out/libfoo.so', b'\x7fELF unstripped', 0o755)
         write(root / 'out/foo-audit.json', b'{}')
         write(root / 'out/foo.o')
         write(root / 'out/.foo.inputs.sha256')
@@ -40,6 +41,19 @@ class ReleaseArchiveTests(unittest.TestCase):
             self.assertEqual(chosen, {'out/libfoo.prx', 'out/foo-audit.json', 'out/sources/foo-1.0/COPYING',
                                       'out/sources/foo-1.0/mod/zstd_license.txt', 'out/sources/foo-1.0/keep.h',
                                       'shared/include/a.h'})
+            debug = {p.as_posix() for p in release.selected(root, self.layout(root), debug=True)}
+            self.assertEqual(debug, {'out/libfoo.so'})
+
+    def test_debug_asset_carries_only_the_unstripped_elf(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            spec = self.layout(root / 'build')
+            self.assertEqual(release.debug_asset(spec), 'foo-debug.tar.xz')
+            archive = release.pack(root / 'build', spec, root / 'dist' / release.debug_asset(spec), debug=True)
+            release.unpack(archive, root / 'target', release.digest(archive))
+            self.assertEqual(sorted(p.name for p in (root / 'target').rglob('*') if p.is_file()), ['libfoo.so'])
+            self.assertIsNone(release.pack(root / 'build', {'asset': 'x.tar.xz', 'files': ['shared']},
+                                           root / 'dist/x-debug.tar.xz', debug=True))
 
     def test_roundtrip_keeps_content_and_mode_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as d:
