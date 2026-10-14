@@ -107,7 +107,7 @@ def pack(root, spec, archive, debug=False):
         return None
     inventory = {'schema': 1, 'asset': archive.name,
                  'files': {path.as_posix(): {'sha256': digest(root / path),
-                                             'mode': (root / path).stat().st_mode & 0o777}
+                                             'mode': (root / path).stat().st_mode & 0o755}
                            for path in files}}
     archive.parent.mkdir(parents=True, exist_ok=True)
     if archive.exists():
